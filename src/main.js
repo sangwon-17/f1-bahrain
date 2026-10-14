@@ -413,7 +413,7 @@ function updateRace(dt) {
 function stepRunning(dt) {
   game.time += dt;
   if (pit.active) {
-    phys.guardSteer = 0;
+    phys.guardSteer = phys.autoBrake = 0;
     const wasStopped = pit.stopped;
     const done = pit.update(dt, phys, car);
     timing.hadPit = true;

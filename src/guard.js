@@ -23,10 +23,23 @@ export function buildGuardZone(track) {
   return zone;
 }
 
+/** 각 지점에서 트랙을 벗어나지 않고 달릴 수 있는 속도 (앞쪽 코너까지 브레이크 거리 반영) */
+export function buildSafeSpeed(track) {
+  const { k, N, step } = track;
+  const mu = CAR.mu * CAR.cornerAssist * GUARD.speedGrip;
+  const c = (mu * 0.5 * 1.2 * CAR.liftArea) / CAR.mass; // 빠를수록 다운포스로 더 잡아요
+  const v = Array.from({ length: N }, (_, i) => Math.min(120, Math.sqrt((mu * 9.81) / Math.max(Math.abs(k[i]) - c, 1e-5))));
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = N - 1; i >= 0; i--) v[i] = Math.min(v[i], Math.sqrt(v[(i + 1) % N] ** 2 + 2 * GUARD.speedBrake * step));
+  }
+  return v;
+}
+
 export class CornerGuard {
   constructor(track) {
     this.track = track;
     this.zone = buildGuardZone(track);
+    this.safe = buildSafeSpeed(track);
     this.armed = true; // false = 직선에서 트랙 밖으로 나간 상태 (보조 쉬는 중)
   }
 
@@ -59,5 +72,10 @@ export class CornerGuard {
       }
     }
     phys.guardSteer += (want - phys.guardSteer) * Math.min(1, dt * GUARD.smooth);
+
+    // 코너 속도 보조: 한계 속도보다 빠르면 액셀을 풀고 브레이크를 살짝 대신 밟아줘요
+    const over = phys.u - this.safe[loc.idx];
+    const wantBrake = GUARD.speedOn && !off && !phys.reverse ? clamp(over / GUARD.speedBand, 0, GUARD.speedMaxBrake) : 0;
+    phys.autoBrake += (wantBrake - phys.autoBrake) * Math.min(1, dt * 8);
   }
 }

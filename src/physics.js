@@ -31,7 +31,7 @@ export class CarPhysics {
     Object.assign(this, {
       x, z, yaw,
       u: 0, v: 0, r: 0,
-      steerIn: 0, steer: 0, guardSteer: 0, throttle: 0, brake: 0,
+      steerIn: 0, steer: 0, guardSteer: 0, autoBrake: 0, throttle: 0, brake: 0,
       gear: 1, rpm: 4000, shiftT: 0, reverse: false, reverseHold: 0,
       ax: 0, ay: 0, wheelSpin: 0, slipF: 0, slipR: 0, lockup: 0, drift: 0,
     });
@@ -55,8 +55,9 @@ export class CarPhysics {
     const steerTarget = clamp((input.left ? 1 : 0) - (input.right ? 1 : 0) + (this.guardSteer || 0), -1, 1);
     const returning = steerTarget === 0 || Math.sign(steerTarget) !== Math.sign(this.steerIn);
     this.steerIn = approach(this.steerIn, steerTarget, (returning ? 5.5 : 4.5) * dt);
-    this.throttle = approach(this.throttle, input.up ? 1 : 0, (input.up ? 4 : 7) * dt);
-    this.brake = approach(this.brake, input.down ? 1 : 0, (input.down ? 8 : 8) * dt); // 키를 누르면 빠르게 세게
+    const ab = this.autoBrake || 0; // 코너 속도 보조 (guard.js)
+    this.throttle = approach(this.throttle, input.up ? 1 - Math.min(1, ab * 4) : 0, (input.up ? 4 : 7) * dt);
+    this.brake = approach(this.brake, Math.max(input.down ? 1 : 0, ab), (input.down ? 8 : 8) * dt); // 키를 누르면 빠르게 세게
 
     const u = this.u, au = Math.abs(u);
     // 드리프트: 스페이스바를 누르고 어느 정도 속도가 있으면 서서히 뒤가 미끄러지기 시작해요
