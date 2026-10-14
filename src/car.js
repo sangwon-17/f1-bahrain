@@ -209,7 +209,7 @@ function findModelWheels(holder, body) {
 // ------------------------------------------------------------
 // 코드로 만든 F1 (Red Bull 풍 — 무광 네이비 + 레드 + 옐로, 로고 없음)
 // ------------------------------------------------------------
-const NAVY = '#16224f', RED = '#d4102b', YELLOW = '#f5c400', CARBON = '#121316';
+const NAVY = '#121a3c', RED = '#d6001c', YELLOW = '#f5c400', CARBON = '#121316';
 
 function canvasTex(w, h, draw, { repeat = false, color = true } = {}) {
   const c = document.createElement('canvas');
@@ -311,7 +311,16 @@ function sidepodLivery() {
     // 위쪽 빨간 띠 + 노란 줄
     g.fillStyle = RED;
     g.beginPath();
-    g.moveTo(U(0.1), V(0.92)); g.lineTo(U(0.4), V(0.92)); g.lineTo(U(0.33), V(0.45)); g.lineTo(U(0.17), V(0.45));
+    g.moveTo(U(0.06), V(0.93)); g.lineTo(U(0.44), V(0.93)); g.lineTo(U(0.36), V(0.3)); g.lineTo(U(0.14), V(0.3));
+    g.fill();
+    // 노란 원 포인트 (해 모양)
+    g.fillStyle = YELLOW;
+    g.beginPath();
+    g.ellipse(U(0.25), V(0.74), U(0.07), H * 0.07, 0, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = RED;
+    g.beginPath();
+    g.ellipse(U(0.25), V(0.74), U(0.045), H * 0.045, 0, 0, Math.PI * 2);
     g.fill();
     g.fillStyle = YELLOW;
     g.beginPath();
@@ -389,10 +398,11 @@ export function buildProceduralCar(envMap) {
     metalness: 0.25, roughness: 0.42, clearcoat: 0.35, clearcoatRoughness: 0.35, envMap, envMapIntensity: 1.1, ...opts,
   });
   const M = {
-    livery: paint({ map: once('chassis', chassisLivery), roughness: 0.48 }),
-    sidepod: paint({ map: once('sidepod', sidepodLivery), roughness: 0.48 }),
-    navy: paint({ color: NAVY, roughness: 0.46 }),
-    wingNavy: paint({ color: NAVY, roughness: 0.4, side: THREE.DoubleSide }),
+    // RB처럼 무광 도장 (반사가 적고 차분하게)
+    livery: paint({ map: once('chassis', chassisLivery), roughness: 0.66, metalness: 0.12, clearcoat: 0.06 }),
+    sidepod: paint({ map: once('sidepod', sidepodLivery), roughness: 0.66, metalness: 0.12, clearcoat: 0.06 }),
+    navy: paint({ color: NAVY, roughness: 0.64, metalness: 0.12, clearcoat: 0.06 }),
+    wingNavy: paint({ color: NAVY, roughness: 0.6, metalness: 0.12, clearcoat: 0.06, side: THREE.DoubleSide }),
     red: paint({ color: RED, roughness: 0.32, clearcoat: 0.7, side: THREE.DoubleSide }),
     yellow: paint({ color: YELLOW, roughness: 0.3, clearcoat: 0.7 }),
     carbon: new THREE.MeshPhysicalMaterial({
