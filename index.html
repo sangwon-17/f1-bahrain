@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bahrain Grand Prix</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <meta name="theme-color" content="#e10600">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700;900&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --navy: #121a3a;
+      --panel: rgba(10, 12, 22, 0.72);
+      --panel-line: rgba(255, 255, 255, 0.1);
+      --text: #f4f5f8;
+      --muted: rgba(244, 245, 248, 0.62);
+      --red: #e10f2f;
+      --yellow: #ffcc00;
+      --green: #19d36b;
+      --purple: #a855f7;
+      --num: 'Titillium Web', 'Noto Sans KR', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: #05060a;
+      color: var(--text);
+      font-family: 'Noto Sans KR', system-ui, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    canvas#view { display: block; }
+    .hidden { display: none !important; }
+
+    /* ---------- 공통 패널 ---------- */
+    .panel {
+      background: var(--panel);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-line);
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+    .num { font-family: var(--num); font-variant-numeric: tabular-nums; }
+
+    #hud { position: fixed; inset: 0; pointer-events: none; }
+
+    /* ---------- 타이밍 타워 (왼쪽 위) ---------- */
+    .top-left { position: absolute; top: 20px; left: 20px; display: grid; gap: 8px; }
+    .mode-row { display: flex; align-items: center; gap: 10px; }
+    .mode-tag {
+      font-family: var(--num); font-weight: 700; font-size: 12px; letter-spacing: 0.2em;
+      padding: 5px 10px; border-radius: 6px; background: var(--red); color: #fff;
+    }
+    #tower { padding: 14px 18px 16px; min-width: 300px; }
+    .lap-row { display: flex; justify-content: space-between; align-items: baseline; font-family: var(--num); }
+    .lap-row .label { font-size: 13px; letter-spacing: 0.18em; color: var(--muted); font-weight: 600; }
+    #lapNum { font-size: 22px; font-weight: 700; }
+    #lapTime { font-size: 46px; font-weight: 700; line-height: 1.05; margin-top: 2px; letter-spacing: 0.01em; }
+    .delta { font-family: var(--num); font-size: 20px; font-weight: 700; height: 26px; }
+    .delta.faster { color: var(--green); }
+    .delta.slower { color: #ff5a6e; }
+    .sectors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
+    .sector {
+      font-family: var(--num); font-size: 12px; color: var(--muted);
+      padding: 6px 8px; border-radius: 6px; background: rgba(255, 255, 255, 0.06);
+      border-bottom: 3px solid rgba(255, 255, 255, 0.15);
+    }
+    .sector b { display: block; font-size: 16px; color: var(--text); font-weight: 600; }
+    .sector.done { border-bottom-color: var(--yellow); }
+    .sector.pb { border-bottom-color: var(--green); }
+    .sector.best { border-bottom-color: var(--purple); }
+
+    /* ---------- 최고/지난 랩 (오른쪽 위) ---------- */
+    .top-right { position: absolute; top: 20px; right: 20px; padding: 12px 16px; display: grid; gap: 6px; min-width: 210px; }
+    .time-line { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; font-family: var(--num); }
+    .time-line .label { font-size: 12px; letter-spacing: 0.18em; color: var(--muted); font-weight: 600; }
+    .time-line .val { font-size: 22px; font-weight: 700; }
+    .time-line.best .val { color: var(--purple); }
+    .tag { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: var(--yellow); color: #111; margin-left: 6px; letter-spacing: 0.1em; }
+
+    /* ---------- 속도 (아래 가운데) ---------- */
+    #speedBox { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); padding: 8px 18px; display: flex; align-items: center; gap: 16px; }
+    #speedBox .speed { font-family: var(--num); font-size: 34px; font-weight: 700; line-height: 1; min-width: 70px; text-align: right; }
+    #speedBox .unit { font-size: 11px; color: var(--muted); letter-spacing: 0.15em; }
+    #speedBox .gear { font-family: var(--num); font-size: 34px; font-weight: 900; color: var(--yellow); padding-left: 16px; border-left: 1px solid var(--panel-line); line-height: 1; }
+
+    /* ---------- 타이어 (오른쪽 아래) ---------- */
+    #tyrePanel { position: absolute; bottom: 20px; right: 20px; padding: 12px 14px; display: grid; gap: 10px; justify-items: center; }
+    .tyre-title { font-family: var(--num); font-size: 11px; letter-spacing: 0.2em; color: var(--muted); font-weight: 600; }
+    .tyre-grid { display: grid; grid-template-columns: auto 34px auto; grid-template-rows: auto auto; column-gap: 8px; row-gap: 14px; align-items: center; }
+    .tyre-cell { display: flex; align-items: center; gap: 6px; font-family: var(--num); font-size: 13px; font-weight: 600; }
+    .tyre-cell.right { flex-direction: row-reverse; }
+    .tyre { width: 14px; height: 26px; border-radius: 4px; background: var(--green); box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.25); }
+    .car-shape { grid-row: 1 / span 2; grid-column: 2; width: 34px; height: 72px; border-radius: 14px 14px 8px 8px; background: linear-gradient(#1b2350, #121a3a); border: 1px solid rgba(255, 255, 255, 0.15); }
+    .box { font-family: var(--num); font-size: 12px; font-weight: 700; letter-spacing: 0.12em; padding: 5px 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.08); color: var(--muted); }
+    .box.on { background: var(--yellow); color: #111; }
+
+    /* ---------- 미니맵 (왼쪽 아래) ---------- */
+    #mapPanel { position: absolute; bottom: 20px; left: 20px; padding: 8px; }
+    #minimap { width: 200px; height: 200px; display: block; }
+    .keys { position: absolute; bottom: 236px; left: 20px; font-size: 12px; color: var(--muted); line-height: 1.7; }
+    .keys kbd {
+      font-family: var(--num); font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 4px;
+      background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.18); color: var(--text);
+    }
+
+    /* ---------- 메시지 / 신호등 / 피트 타이머 ---------- */
+    .message {
+      position: absolute; top: 24px; left: 50%; transform: translate(-50%, -12px);
+      padding: 12px 22px; border-radius: 10px; font-size: 16px; font-weight: 500;
+      background: rgba(10, 12, 22, 0.82); border-left: 4px solid var(--yellow);
+      opacity: 0; transition: opacity 0.25s, transform 0.25s; white-space: nowrap;
+    }
+    .message.show { opacity: 1; transform: translate(-50%, 0); }
+    .message.box { border-left-color: var(--red); }
+    .message.good { border-left-color: var(--purple); }
+    .message b { font-family: var(--num); }
+    #lights { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); padding: 14px 18px; display: flex; gap: 14px; }
+    #lights .dot { width: 38px; height: 38px; border-radius: 50%; background: #2a0508; box-shadow: inset 0 0 0 3px rgba(0, 0, 0, 0.5); }
+    #lights .dot.on { background: radial-gradient(circle at 40% 35%, #ff6a6a, #e10f2f 60%, #8a0518); box-shadow: 0 0 22px rgba(255, 30, 50, 0.9); }
+    #pitTimer { position: absolute; top: 90px; left: 50%; transform: translateX(-50%); padding: 10px 22px; font-family: var(--num); font-size: 28px; font-weight: 700; color: var(--yellow); }
+
+    /* ---------- 메뉴 ---------- */
+    .overlay {
+      position: fixed; inset: 0; display: grid; place-items: center; padding: 16px;
+      background: radial-gradient(ellipse at 30% 20%, rgba(30, 40, 90, 0.35), rgba(3, 4, 8, 0.82));
+    }
+    .menu { width: min(560px, 100%); padding: 36px 40px; }
+    .eyebrow { font-family: var(--num); font-size: 13px; font-weight: 700; letter-spacing: 0.4em; color: var(--yellow); }
+    .menu h1 { font-family: var(--num); font-size: 52px; font-weight: 900; line-height: 1; margin: 10px 0 4px; letter-spacing: -0.01em; }
+    .menu h1 span { color: var(--red); }
+    .menu .sub { color: var(--muted); margin-bottom: 26px; }
+    .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 22px; }
+    .mode-btn {
+      text-align: left; padding: 16px; border-radius: 12px; cursor: pointer; color: var(--text);
+      background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12);
+      font: inherit; transition: background 0.15s, border-color 0.15s, transform 0.15s;
+    }
+    .mode-btn:hover { background: rgba(255, 255, 255, 0.1); transform: translateY(-2px); }
+    .mode-btn.primary { background: linear-gradient(135deg, #1b2350, #121a3a); border-color: rgba(255, 204, 0, 0.5); }
+    .mode-btn .t { font-family: var(--num); font-size: 18px; font-weight: 700; letter-spacing: 0.05em; }
+    .mode-btn .d { font-size: 13px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+    .controls { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; font-size: 14px; color: var(--muted); margin-bottom: 18px; }
+    .controls kbd {
+      font-family: var(--num); font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 5px; text-align: center;
+      background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-bottom-width: 2px; color: var(--text);
+    }
+    .menu-best { font-family: var(--num); color: var(--muted); font-size: 14px; margin-bottom: 14px; }
+    .menu-best b { color: var(--purple); font-size: 18px; }
+    .credits { font-size: 11px; color: rgba(244, 245, 248, 0.4); line-height: 1.6; border-top: 1px solid var(--panel-line); padding-top: 12px; }
+    .loading { font-family: var(--num); letter-spacing: 0.2em; color: var(--muted); margin-bottom: 18px; }
+    .pause-btns { display: grid; gap: 10px; }
+    .modes.three { grid-template-columns: 1fr 1fr; }
+    .modes.three .race { grid-column: 1 / span 2; border-color: rgba(25, 211, 255, 0.45); background: linear-gradient(135deg, rgba(25, 211, 255, 0.12), rgba(255, 255, 255, 0.04)); }
+
+    /* ---------- 레이스: 대기실 / 순위 / 결과 ---------- */
+    #lobby { position: fixed; top: 50%; right: 24px; transform: translateY(-50%); width: min(340px, calc(100vw - 32px)); padding: 20px; display: grid; gap: 12px; }
+    .lobby-title { font-size: 22px; font-weight: 700; }
+    .lobby-row, .st-row { display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; background: rgba(255, 255, 255, 0.05); font-size: 14px; }
+    #lobbyList, #standingsList, .results-list { display: grid; gap: 6px; }
+    .lobby-row .pos, .st-row .pos { font-family: var(--num); font-weight: 900; color: var(--yellow); }
+    .lobby-row .state { font-size: 12px; color: var(--muted); }
+    .lobby-row.ready { background: rgba(25, 211, 107, 0.14); }
+    .lobby-row.ready .state { color: var(--green); font-weight: 700; }
+    .lobby-note, .lobby-help { font-size: 12px; color: var(--muted); line-height: 1.6; }
+    .lobby-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .lobby-room { font-size: 14px; letter-spacing: 1px; }
+    .lobby-room b { font-size: 20px; letter-spacing: 4px; color: #fff; }
+    .mode-btn.small { padding: 10px 14px; text-align: center; font-weight: 700; }
+    #standings { position: absolute; top: 150px; right: 20px; width: 240px; padding: 12px; }
+    .st-title { font-family: var(--num); font-size: 12px; letter-spacing: 0.2em; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
+    .st-row .info { font-family: var(--num); font-size: 13px; color: var(--muted); }
+    .st-row.me { background: rgba(255, 204, 0, 0.16); }
+    .results-list { margin-bottom: 20px; }
+    .results-list .st-row { font-size: 16px; padding: 12px 14px; }
+    #drs { position: absolute; top: 18%; left: 50%; transform: translateX(-50%); padding: 10px 22px; border-radius: 10px; background: rgba(0,200,83,.88); color: #fff; font-weight: 800; text-align: center; box-shadow: 0 0 24px rgba(0,230,118,.7); opacity: 0; transition: opacity .2s; }
+    #drs.on { opacity: 1; }
+    #drs b { display: block; font-size: 28px; letter-spacing: 4px; }
+    #drs span { font-size: 14px; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+        "./src/bahrain-data.js": "./src/bahrain-data.js?v=7",
+        "./src/cameras.js": "./src/cameras.js?v=7",
+        "./src/car.js": "./src/car.js?v=7",
+        "./src/config.js": "./src/config.js?v=7",
+        "./src/environment.js": "./src/environment.js?v=7",
+        "./src/f1design.js": "./src/f1design.js?v=7",
+        "./src/f1geometry.js": "./src/f1geometry.js?v=7",
+        "./src/hud.js": "./src/hud.js?v=7",
+        "./src/main.js": "./src/main.js?v=7",
+        "./src/muscle.js": "./src/muscle.js?v=7",
+        "./src/net.js": "./src/net.js?v=7",
+        "./src/physics.js": "./src/physics.js?v=7",
+        "./src/pitstop.js": "./src/pitstop.js?v=7",
+        "./src/race.js": "./src/race.js?v=7",
+        "./src/textures.js": "./src/textures.js?v=7",
+        "./src/track.js": "./src/track.js?v=7"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="view"></canvas>
+
+  <div id="hud" class="hidden">
+    <div class="top-left">
+      <div class="mode-row"><span id="modeLabel" class="mode-tag">TIME ATTACK</span></div>
+      <div id="tower" class="panel">
+        <div class="lap-row"><span class="label">LAP</span><span id="lapNum">1</span></div>
+        <div id="lapTime" class="num">0.000</div>
+        <div id="delta" class="delta"></div>
+        <div class="sectors">
+          <div id="s1" class="sector">S1<b>--.---</b></div>
+          <div id="s2" class="sector">S2<b>--.---</b></div>
+          <div id="s3" class="sector">S3<b>--.---</b></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="top-right panel" id="timesPanel">
+      <div class="time-line best"><span class="label">BEST</span><span id="bestLap" class="val">-:--.---</span></div>
+      <div class="time-line"><span class="label">LAST<span id="lastTag" class="tag hidden">PIT</span></span><span id="lastLap" class="val">-:--.---</span></div>
+    </div>
+
+    <div id="speedBox" class="panel">
+      <div><div id="speed" class="speed">0</div><div class="unit">KM/H</div></div>
+      <div id="gear" class="gear">1</div>
+    </div>
+
+    <div id="tyrePanel" class="panel">
+      <div class="tyre-title">TYRES</div>
+      <div class="tyre-grid">
+        <div class="tyre-cell"><span id="tyrePct0">0%</span><div id="tyre0" class="tyre"></div></div>
+        <div class="car-shape"></div>
+        <div class="tyre-cell right"><span id="tyrePct1">0%</span><div id="tyre1" class="tyre"></div></div>
+        <div class="tyre-cell"><span id="tyrePct2">0%</span><div id="tyre2" class="tyre"></div></div>
+        <div class="tyre-cell right"><span id="tyrePct3">0%</span><div id="tyre3" class="tyre"></div></div>
+      </div>
+      <div id="boxState" class="box">P 피트인</div>
+    </div>
+
+    <div class="keys">
+      <kbd>Space</kbd> 드리프트 &nbsp; <kbd>C</kbd> 카메라 &nbsp; <kbd>P</kbd> 피트인 &nbsp; <kbd>R</kbd> 재시작 &nbsp; <kbd>ESC</kbd> 메뉴
+    </div>
+    <div id="mapPanel" class="panel"><canvas id="minimap"></canvas></div>
+
+    <div id="standings" class="panel hidden"><div class="st-title">RACE · 순위</div><div id="standingsList"></div></div>
+    <div id="message" class="message"></div>
+    <div id="lights" class="panel hidden"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    <div id="drs"><b>DRS</b><span>DRS 열림 · 앞차를 추월하세요!</span></div>
+    <div id="pitTimer" class="panel hidden">PIT STOP 0.00s</div>
+  </div>
+
+  <div id="menu" class="overlay">
+    <div class="menu panel">
+      <div class="eyebrow">SAKHIR · GRAND PRIX</div>
+      <h1>BAHRAIN <span>GP</span></h1>
+      <div class="sub">바레인 인터내셔널 서킷 · 5.412 km · 15 코너</div>
+      <div id="loading" class="loading">트랙 준비 중…</div>
+      <div id="modeButtons" class="modes three hidden">
+        <button class="mode-btn primary" data-mode="attack"><div class="t">TIME ATTACK</div><div class="d">랩타임과 구간 기록을 재요. 최고 기록에 도전!</div></button>
+        <button class="mode-btn" data-mode="free"><div class="t">FREE DRIVE</div><div class="d">기록 없이 자유롭게 서킷을 달려요.</div></button>
+        <button class="mode-btn race" data-mode="race"><div class="t">RACE · 친구와</div><div class="d">초대 링크로 친구와 같은 트랙에서 3바퀴 레이스!</div></button>
+      </div>
+      <div class="controls">
+        <kbd>↑</kbd><span>가속</span>
+        <kbd>↓</kbd><span>브레이크 (멈춘 상태에서 계속 누르면 후진)</span>
+        <kbd>← →</kbd><span>핸들</span>
+        <kbd>Space</kbd><span>드리프트 (누르고 있는 동안 뒤가 미끄러져요 · 액셀과 같이)</span>
+        <kbd>C</kbd><span>카메라 전환 (3인칭 / 운전석)</span>
+        <kbd>P</kbd><span>피트인 요청 (이번 랩 끝에 피트로 들어가 타이어 교체)</span>
+      </div>
+      <div id="menuBest" class="menu-best"></div>
+      <div class="credits">
+        <div id="carCredit"></div>
+        <div>Circuit data: bacinger/f1-circuits (MIT License)</div>
+        <div>팬메이드 비공식 게임이에요. 실제 팀·대회와 관련이 없어요.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="lobby" class="panel hidden">
+    <div class="eyebrow">RACE LOBBY</div>
+    <div class="lobby-title">레이스 대기실</div>
+    <div id="roomInfo" class="lobby-room"></div>
+    <div id="lobbyList"></div>
+    <div class="lobby-btns">
+      <button class="mode-btn primary small" data-action="ready" id="readyBtn">준비 완료 (Enter)</button>
+      <button class="mode-btn small" data-action="invite">초대 링크 복사</button>
+      <button class="mode-btn small" data-action="join">코드로 참가</button>
+      <button class="mode-btn small" data-action="menu">나가기</button>
+    </div>
+    <div class="lobby-help">2명 이상이 모두 준비되면 5초 뒤 신호등이 켜져요. 초대 링크를 보내거나 방 코드를 알려 주면 친구가 같은 방에 들어와요.</div>
+  </div>
+
+  <div id="results" class="overlay hidden">
+    <div class="menu panel">
+      <div class="eyebrow">RACE RESULT</div>
+      <h1>결과</h1>
+      <div id="resultsList" class="results-list"></div>
+      <div class="pause-btns">
+        <button class="mode-btn primary" data-action="lobby"><div class="t">한 번 더 (대기실로)</div></button>
+        <button class="mode-btn" data-action="menu"><div class="t">메인 메뉴</div></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="pause" class="overlay hidden">
+    <div class="menu panel">
+      <div class="eyebrow">PAUSED</div>
+      <h1>일시정지</h1>
+      <div class="sub">&nbsp;</div>
+      <div class="pause-btns">
+        <button class="mode-btn primary" data-action="resume"><div class="t">계속하기</div></button>
+        <button class="mode-btn" data-action="restart"><div class="t">처음부터 다시</div></button>
+        <button class="mode-btn" data-action="menu"><div class="t">메인 메뉴</div></button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js?v=7"></script>
+</body>
+</html>
