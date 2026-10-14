@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { CAMERA } from './config.js';
 
 // 카메라 3종: 'chase'(차 뒤 3인칭), 'cockpit'(운전석 1인칭), 'pit'(피트스탑 연출, 자동)
 
@@ -48,7 +49,7 @@ export class CameraRig {
 
     if (this.active === 'cockpit') {
       cam.near = 0.03;
-      cam.fov = 78; // 속도와 상관없이 같은 시야
+      cam.fov = CAMERA.cockpitFov; // 속도와 상관없이 같은 시야
       car.root.updateMatrixWorld(true); // 이번 프레임 차 위치로 (안 하면 빠를 때 눈이 차 안쪽 뒤로 밀려 앞이 가려져요)
       this.eye.copy(car.eye).applyMatrix4(car.body.matrixWorld);
       // 머리가 G-force에 따라 살짝 쏠리고, 연석에서 덜컹거려요
@@ -93,7 +94,7 @@ export class CameraRig {
       cam.position.y += jitter(sh);
       this.look.set(phys.x + Math.sin(phys.yaw) * 5, ch.look, phys.z + Math.cos(phys.yaw) * 5);
       cam.lookAt(this.look);
-      cam.fov = 58; // 속도와 상관없이 같은 시야 (차 크기가 그대로)
+      cam.fov = CAMERA.chaseFov; // 속도와 상관없이 같은 시야 (차 크기가 그대로)
     }
     cam.updateProjectionMatrix();
   }

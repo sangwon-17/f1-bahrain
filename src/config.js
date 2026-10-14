@@ -85,6 +85,12 @@ export const GUARD = {
   speedMaxBrake: 0.7, // 대신 밟아주는 브레이크 최대량 (1 = 끝까지)
 };
 
+// 카메라 시야각 (속도와 상관없이 고정)
+export const CAMERA = {
+  chaseFov: 58,       // 3인칭
+  cockpitFov: 78,     // 운전석
+};
+
 export const TYRE = {
   wearPerLap: 0.18,   // 보통으로 달리면 한 바퀴에 약 18% 닳아요
   gripLossAtFull: 0.3,

@@ -388,6 +388,7 @@ export function buildTrackMeshes(track, scene) {
 
   // ---------- 방호벽 ----------
   buildBarriers(track, group);
+  buildTrackside(track, group);
 
   // ---------- 피트레인 ----------
   const pitIdx0 = Math.floor(track.wrap(PIT.startD) / track.step);
@@ -516,6 +517,79 @@ function buildBarriers(track, group) {
     ([x, z, h]) => m4.compose(v.set(x, 0, z), q.setFromEuler(e.set(0, h, 0)), one));
   const white = new THREE.Color(0xf0f0f0), red = new THREE.Color(0xd01025);
   tecpro.forEach(([, , , c], i) => tp.setColorAt(i, c ? red : white));
+}
+
+/** 속도감용 촘촘한 물체: 방호벽 앞 빨강/흰 기둥 + 코너 앞 제동 거리 표지판 (150 / 100 / 50 m) */
+function buildTrackside(track, group) {
+  const { N, step, wallL, wallR } = track;
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), one = new THREE.Vector3(1, 1, 1), v = new THREE.Vector3();
+  const sample = (arr, d) => arr[Math.floor(track.wrap(d) / step) % N];
+
+  // 기둥: 양쪽 방호벽 바로 앞에 6m마다
+  const posts = [];
+  for (const side of [1, -1]) {
+    const wall = side > 0 ? wallL : wallR;
+    for (let d = 0; d < track.L; d += 6) {
+      if (side < 0 && track.inPitZone(d)) continue;
+      const p = track.poseAt(d, side * (sample(wall, d) - 0.45));
+      posts.push([p.x, p.z, posts.length % 2]);
+    }
+  }
+  const postGeo = new THREE.CylinderGeometry(0.06, 0.07, 1.1, 8).translate(0, 0.55, 0);
+  const pm = new THREE.InstancedMesh(postGeo, new THREE.MeshStandardMaterial({ roughness: 0.5 }), posts.length);
+  const red = new THREE.Color(0xd01025), white = new THREE.Color(0xf2f2f2);
+  posts.forEach(([x, z, c], i) => { pm.setMatrixAt(i, m4.compose(v.set(x, 0, z), q.identity(), one)); pm.setColorAt(i, c ? red : white); });
+  pm.castShadow = true;
+  group.add(pm);
+
+  // 제동 표지판: 코너가 시작되는 곳(직선이 100m 이상 이어진 뒤)마다 앞쪽 150/100/50m에
+  const boardTex = (txt) => {
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 160;
+    const g = c.getContext('2d');
+    g.fillStyle = '#f4f4f2'; g.fillRect(0, 0, 256, 160);
+    g.strokeStyle = '#111'; g.lineWidth = 10; g.strokeRect(5, 5, 246, 150);
+    g.fillStyle = '#111'; g.font = 'bold 104px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(txt, 128, 86);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  };
+  const boardGeo = new THREE.PlaneGeometry(1.4, 0.875).translate(0, 1.6, 0);
+  const legGeo = new THREE.BoxGeometry(0.08, 1.2, 0.08).translate(0, 0.6, 0);
+  const legMat = new THREE.MeshStandardMaterial({ color: 0x33363c, roughness: 0.6 });
+  const dists = [150, 100, 50];
+  const mats = dists.map((n) => new THREE.MeshStandardMaterial({ map: boardTex(String(n)), roughness: 0.6 }));
+  const spots = [[], [], []];
+  let straight = 0;
+  for (let i = 0; i < N; i++) {
+    const c = track.corner[i] || 0;
+    if (c < 0.2) { straight += step; continue; }
+    if (c > 0.5 && straight > 100) {
+      const d0 = i * step;
+      const side = Math.sign(track.k[i]) > 0 ? -1 : 1; // 코너 바깥쪽에 세워요
+      dists.forEach((n, j) => {
+        const d = d0 - n;
+        if (side < 0 && track.inPitZone(d)) return;
+        const wall = side > 0 ? wallL : wallR;
+        const p = track.poseAt(d, side * (sample(wall, d) - 0.9));
+        spots[j].push([p.x, p.z, p.h]);
+      });
+    }
+    if (c > 0.5) straight = 0;
+  }
+  spots.forEach((list, j) => {
+    if (!list.length) return;
+    const board = new THREE.InstancedMesh(boardGeo, mats[j], list.length);
+    const legs = new THREE.InstancedMesh(legGeo, legMat, list.length);
+    list.forEach(([x, z, h], i) => {
+      m4.compose(v.set(x, 0, z), q.setFromEuler(e.set(0, h + Math.PI, 0)), one); // 다가오는 차를 바라보게
+      board.setMatrixAt(i, m4);
+      legs.setMatrixAt(i, m4);
+    });
+    board.castShadow = legs.castShadow = true;
+    group.add(board, legs);
+  });
 }
 
 /** 출발선, 그리드 칸, 피트레인 선 */

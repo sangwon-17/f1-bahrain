@@ -18,6 +18,7 @@ import { Hud, fmtTime } from './hud.js';
 import { Net } from './net.js';
 import { RemoteCars, RACE_LAPS } from './race.js';
 import { AiField } from './ai.js';
+import { createTuning } from './tuning.js';
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const SECTORS = [0.31, 0.7]; // 구간 경계 (한 바퀴 대비 비율)
@@ -93,6 +94,7 @@ addEventListener('keydown', (e) => {
   if (e.repeat) return;
   if (e.code === 'KeyC' && game.state !== 'menu') cams.toggle();
   if (e.code === 'KeyP') togglePitRequest();
+  if (e.code === 'KeyG' && tuning) tuning.toggle();
   if (e.code === 'KeyR' && game.session !== 'race' && (game.state === 'running' || game.state === 'countdown')) startSession(game.session);
   if (e.code === 'Enter' && game.state === 'lobby') toggleReady();
   if (e.code === 'Escape') togglePause();
@@ -103,7 +105,7 @@ addEventListener('blur', () => { for (const k in input) input[k] = false; });
 // ============================================================
 // 게임 상태
 // ============================================================
-let track, env, car, phys, cams, pit, hud, net, remotes, ai, guard;
+let track, env, car, phys, cams, pit, hud, net, remotes, ai, guard, tuning;
 // 친구와 레이스 상태
 const race = { id: null, slot: -1, finished: false, finishTime: null, endAt: 0, resultsShown: false, uiT: 0 };
 const game = { state: 'loading', session: 'attack', time: 0, countdown: 0, lightsOutAt: 0, prevState: null };
@@ -742,6 +744,7 @@ async function init() {
   await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 30)));
   track = createTrack(BAHRAIN.coords);
   guard = new CornerGuard(track);
+  tuning = createTuning(guard);
   const trackGroup = buildTrackMeshes(track, scene);
   env = buildEnvironment(scene, track);
   const reflection = makeReflectionEnv(renderer, scene.background);
