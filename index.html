@@ -181,6 +181,10 @@
     .st-row.me { background: rgba(255, 204, 0, 0.16); }
     .results-list { margin-bottom: 20px; }
     .results-list .st-row { font-size: 16px; padding: 12px 14px; }
+    #drs { position: absolute; top: 18%; left: 50%; transform: translateX(-50%); padding: 10px 22px; border-radius: 10px; background: rgba(0, 200, 83, 0.88); color: #fff; font-weight: 800; text-align: center; box-shadow: 0 0 24px rgba(0, 230, 118, 0.7); opacity: 0; transition: opacity 0.2s; }
+    #drs.on { opacity: 1; }
+    #drs b { display: block; font-family: var(--num); font-size: 28px; letter-spacing: 4px; }
+    #drs span { font-size: 14px; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script type="importmap">
@@ -188,24 +192,24 @@
       "imports": {
         "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
         "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-        "./src/ai.js": "./src/ai.js?v=9",
-        "./src/bahrain-data.js": "./src/bahrain-data.js?v=9",
-        "./src/cameras.js": "./src/cameras.js?v=9",
-        "./src/car.js": "./src/car.js?v=9",
-        "./src/config.js": "./src/config.js?v=9",
-        "./src/environment.js": "./src/environment.js?v=9",
-        "./src/f1design.js": "./src/f1design.js?v=9",
-        "./src/f1geometry.js": "./src/f1geometry.js?v=9",
-        "./src/guard.js": "./src/guard.js?v=9",
-        "./src/hud.js": "./src/hud.js?v=9",
-        "./src/main.js": "./src/main.js?v=9",
-        "./src/muscle.js": "./src/muscle.js?v=9",
-        "./src/net.js": "./src/net.js?v=9",
-        "./src/physics.js": "./src/physics.js?v=9",
-        "./src/pitstop.js": "./src/pitstop.js?v=9",
-        "./src/race.js": "./src/race.js?v=9",
-        "./src/textures.js": "./src/textures.js?v=9",
-        "./src/track.js": "./src/track.js?v=9"
+        "./src/ai.js": "./src/ai.js?v=10",
+        "./src/bahrain-data.js": "./src/bahrain-data.js?v=10",
+        "./src/cameras.js": "./src/cameras.js?v=10",
+        "./src/car.js": "./src/car.js?v=10",
+        "./src/config.js": "./src/config.js?v=10",
+        "./src/environment.js": "./src/environment.js?v=10",
+        "./src/f1design.js": "./src/f1design.js?v=10",
+        "./src/f1geometry.js": "./src/f1geometry.js?v=10",
+        "./src/guard.js": "./src/guard.js?v=10",
+        "./src/hud.js": "./src/hud.js?v=10",
+        "./src/main.js": "./src/main.js?v=10",
+        "./src/muscle.js": "./src/muscle.js?v=10",
+        "./src/net.js": "./src/net.js?v=10",
+        "./src/physics.js": "./src/physics.js?v=10",
+        "./src/pitstop.js": "./src/pitstop.js?v=10",
+        "./src/race.js": "./src/race.js?v=10",
+        "./src/textures.js": "./src/textures.js?v=10",
+        "./src/track.js": "./src/track.js?v=10"
       }
     }
   </script>
@@ -258,6 +262,7 @@
     <div id="standings" class="panel hidden"><div class="st-title">RACE · 순위</div><div id="standingsList"></div></div>
     <div id="message" class="message"></div>
     <div id="lights" class="panel hidden"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    <div id="drs"><b>DRS</b><span>DRS 열림 · 앞차를 추월하세요!</span></div>
     <div id="pitTimer" class="panel hidden">PIT STOP 0.00s</div>
   </div>
 
@@ -329,6 +334,6 @@
     </div>
   </div>
 
-  <script type="module" src="./src/main.js?v=9"></script>
+  <script type="module" src="./src/main.js?v=10"></script>
 </body>
 </html>

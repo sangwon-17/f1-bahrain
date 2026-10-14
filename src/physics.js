@@ -55,7 +55,7 @@ export class CarPhysics {
     const steerTarget = clamp((input.left ? 1 : 0) - (input.right ? 1 : 0) + (this.guardSteer || 0), -1, 1);
     const returning = steerTarget === 0 || Math.sign(steerTarget) !== Math.sign(this.steerIn);
     this.steerIn = approach(this.steerIn, steerTarget, (returning ? 5.5 : 4.5) * dt);
-    this.throttle = approach(this.throttle, input.up ? 1 : 0, (input.up ? 9 : 7) * dt);
+    this.throttle = approach(this.throttle, input.up ? 1 : 0, (input.up ? 4 : 7) * dt);
     this.brake = approach(this.brake, input.down ? 1 : 0, (input.down ? 8 : 8) * dt); // 키를 누르면 빠르게 세게
 
     const u = this.u, au = Math.abs(u);
@@ -67,7 +67,7 @@ export class CarPhysics {
     // 핸들 최대 각도 (config.js STEER): 직선은 속도에 따라 작게, 코너 구간에선 cornerDeg까지
     // cornerAmt = 지금 위치가 얼마나 코너인지 (0 = 직선, 1 = 코너, main.js에서 넣어줘요)
     const kmh = au * 3.6;
-    const straightDeg = STEER.straightSlowDeg + (STEER.straightFastDeg - STEER.straightSlowDeg) * clamp((kmh - 60) / (250 - 60), 0, 1);
+    const straightDeg = Math.min(STEER.straightSlowDeg, (Math.atan((STEER.straightMaxG * 9.81 * Lw) / Math.max(au * au, 1)) * 180) / Math.PI);
     let deg = straightDeg + (STEER.cornerDeg - straightDeg) * (this.cornerAmt || 0);
     deg += (Math.max(deg, STEER.parkingDeg) - deg) * smooth01((40 - kmh) / 25); // 거의 멈췄을 땐 크게 (유턴·피트)
     deg += STEER.driftExtraDeg * d;
@@ -107,6 +107,7 @@ export class CarPhysics {
       Fdrive = (CAR.power * this.throttle) / Math.max(au, 6);
       if (this.shiftT > 0) Fdrive *= 0.8; // F1은 기어 변속이 아주 빨라요 // 기어 바꾸는 순간 살짝 힘이 빠져요
       Fdrive = Math.min(Fdrive, muRbase * FzR * CAR.traction); // 트랙션 컨트롤: 바퀴가 헛돌지 않게
+      Fdrive = Math.min(Fdrive, (CAR.launchForce + CAR.launchForcePerMs * au) * this.throttle); // 가속을 부드럽게
       // 뒷바퀴가 옆으로 많이 미끄러지면 힘을 줄여서 스핀을 막아요 (키보드용 보조, 드리프트 중엔 꺼져요)
       const rearSlip = Math.abs(Math.atan2(this.v - b * this.r, Math.max(au, 3)));
       Fdrive *= 1 - clamp((rearSlip - 0.12) / 0.1, 0, 0.5) * (1 - d); // 코너에서도 액셀이 잘 먹게 덜 끊어요

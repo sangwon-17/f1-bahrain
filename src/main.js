@@ -629,6 +629,7 @@ function updateCarVisual(dt) {
   const wantOpen = game.state === 'running' && !pit.active && phys.u > 230 / 3.6 && phys.throttle > 0.95 && Math.abs(phys.steerIn) < 0.15 ? 1 : 0;
   phys.aeroOpen = (phys.aeroOpen || 0) + (wantOpen - (phys.aeroOpen || 0)) * Math.min(1, dt * (wantOpen ? 4 : 10));
   car.setAero(phys.aeroOpen);
+  document.getElementById('drs').classList.toggle('on', phys.aeroOpen > 0.5);
   if (car.rainLight) {
     const blink = pit.active && Math.floor(game.time * 4) % 2 === 0;
     car.rainLight.color.setRGB(blink ? 5 : 0.25, blink ? 0.2 : 0.01, blink ? 0.15 : 0.01);

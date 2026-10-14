@@ -39,7 +39,7 @@ export class AiField {
   profile(skill) {
     const { k, N, step } = this.track;
     const mu = CAR.mu * CAR.cornerAssist * 1.08 * skill, c = (mu * 1.92) / CAR.mass; // 다운포스 덕분에 빠를수록 더 잡아요
-    const top = 99 * (0.97 + 0.03 * skill);
+    const top = 86 * (0.97 + 0.03 * skill); // 약 310 km/h (내 차는 DRS로 320)
     const v = Array.from({ length: N }, (_, i) => Math.min(top, Math.sqrt((mu * 9.81) / Math.max(Math.abs(k[i]) - c, 1e-5))));
     const brake = 50 * skill;
     for (let pass = 0; pass < 2; pass++) {
@@ -99,7 +99,7 @@ export class AiField {
         else if (a.v > lead.v) target = Math.min(target, lead.v + Math.max(0, lead.gap - 6) * 1.5); // 너무 붙으면 속도 맞추기
       }
       // 가속 (F1 출력 / 공기저항), 브레이크
-      const accel = Math.min(14.5 * CAR.traction / 1.25, CAR.power / CAR.mass / Math.max(a.v, 6)) - (0.6 * CAR.dragArea * a.v * a.v) / CAR.mass;
+      const accel = Math.min((CAR.launchForce + CAR.launchForcePerMs * a.v) / CAR.mass, CAR.power / CAR.mass / Math.max(a.v, 6)) - (0.6 * CAR.dragArea * a.v * a.v) / CAR.mass;
       a.braking = target < a.v - 0.5;
       a.v = clamp(a.v + clamp(target - a.v, -45 * dt, accel * (0.9 + 0.1 * a.skill) * catchUp * dt), 0, 100);
       a.prog += a.v * dt;

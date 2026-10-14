@@ -30,8 +30,10 @@ export const CAR = {
   cgToFront: 1.75,    // 무게 배분 약 45:55 (뒤쪽이 더 무거워요)
   cgToRear: 1.45,
   halfTrack: 0.8,
-  power: 1.2e6,       // 엔진 출력 (게임용으로 강하게, 약 1,600마력) — 클수록 액셀이 세요
-  dragArea: 1.9,      // 공기저항 — 최고속도 ≈ 365 km/h
+  power: 655e3,       // 엔진 출력 (약 880마력) — 최고속도: DRS 열면 ≈ 320 km/h, 닫으면 ≈ 298 km/h
+  dragArea: 1.9,      // 공기저항
+  launchForce: 3200,  // 저속 최대 구동력 (N) — 클수록 출발이 세요 (0→100 약 7초)
+  launchForcePerMs: 60, // 속도 1 m/s당 늘어나는 구동력 한도 (고속 최고속도는 그대로 유지)
   liftArea: 3.2,      // F1의 강한 다운포스
   aeroFront: 0.45,
   mu: 1.8,            // 슬릭 타이어 접지력
@@ -46,7 +48,7 @@ export const CAR = {
 // 핸들 최대 각도 (도, 방향키를 끝까지 눌렀을 때 앞바퀴 기준) — 숫자를 바꿔서 느낌을 조절해요
 export const STEER = {
   straightSlowDeg: 8,   // 직선, 60 km/h 이하
-  straightFastDeg: 1,   // 직선, 250 km/h 이상 (그 사이 속도는 자연스럽게 이어져요)
+  straightMaxG: 1.2,    // 직선에서 핸들을 끝까지 꺾었을 때 옆으로 받는 힘 (G) — 빠를수록 각도가 자동으로 작아져서 고속에서 휘청이지 않아요
   cornerDeg: 12,        // 코너 구간 (속도와 상관없이 같아요)
   parkingDeg: 30,       // 거의 멈췄을 때 (15 km/h 이하, 40 km/h까지 점점 줄어요) — 유턴·피트·사고 후 탈출용
   driftExtraDeg: 6,     // 드리프트(Space) 중 추가 각도 — 카운터스티어용

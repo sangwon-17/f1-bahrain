@@ -48,7 +48,7 @@ export class CameraRig {
 
     if (this.active === 'cockpit') {
       cam.near = 0.03;
-      cam.fov = 78 + clamp(kmh - 60, 0, 280) * 0.06 + Math.max(0, this.kick) * 10;
+      cam.fov = 78; // 속도와 상관없이 같은 시야
       car.root.updateMatrixWorld(true); // 이번 프레임 차 위치로 (안 하면 빠를 때 눈이 차 안쪽 뒤로 밀려 앞이 가려져요)
       this.eye.copy(car.eye).applyMatrix4(car.body.matrixWorld);
       // 머리가 G-force에 따라 살짝 쏠리고, 연석에서 덜컹거려요
@@ -82,18 +82,18 @@ export class CameraRig {
     } else {
       cam.near = 0.1;
       // 카메라 방향은 차 방향을 살짝 늦게 따라가요 (코너에서 차 옆모습이 보이게)
-      this.camYaw += wrapAngle(phys.yaw - this.camYaw) * (1 - Math.exp(-5.5 * dt));
+      this.camYaw = phys.yaw; // 카메라가 차 바로 뒤에 고정돼요 (차가 항상 같은 모습으로 보여요)
       const ch = car.chase || { dist: 6.4, height: 1.85, look: 0.75 };
-      const dist = ch.dist + speed * 0.01 + this.kick * 1.4;
-      const height = ch.height + speed * 0.0035;
+      const dist = ch.dist;
+      const height = ch.height;
       const fwdX = Math.sin(this.camYaw), fwdZ = Math.cos(this.camYaw);
       cam.position.set(phys.x - fwdX * dist, height, phys.z - fwdZ * dist);
-      const sh = this.shake * 0.08 + rumble * 0.02 + (speed > 40 ? (speed - 40) * 0.0013 : 0);
+      const sh = this.shake * 0.08 + rumble * 0.02;
       cam.position.x += jitter(sh);
       cam.position.y += jitter(sh);
       this.look.set(phys.x + Math.sin(phys.yaw) * 5, ch.look, phys.z + Math.cos(phys.yaw) * 5);
       cam.lookAt(this.look);
-      cam.fov = 58 + clamp(kmh - 60, 0, 280) * 0.09 + Math.max(0, this.kick) * 14; // 빠를수록 화면이 넓어져 속도감이 커져요
+      cam.fov = 58; // 속도와 상관없이 같은 시야 (차 크기가 그대로)
     }
     cam.updateProjectionMatrix();
   }
