@@ -54,7 +54,7 @@ export class Hud {
     this.mmSize = size;
   }
 
-  drawMinimap(x, z, yaw) {
+  drawMinimap(x, z, yaw, others = []) {
     const g = this.mm, s = this.mmSize;
     g.clearRect(0, 0, s, s);
     g.lineJoin = 'round';
@@ -66,6 +66,13 @@ export class Hud {
     g.stroke(this.mmPath);
     g.fillStyle = '#fff';
     g.fillRect(this.mmStart[0] - 4, this.mmStart[1] - 1, 8, 2);
+    for (const o of others) {
+      const [ox, oy] = this.toMap(o.x, o.z);
+      g.fillStyle = o.color;
+      g.beginPath();
+      g.arc(ox, oy, 3.5, 0, Math.PI * 2);
+      g.fill();
+    }
     const [cx, cy] = this.toMap(x, z);
     g.save();
     g.translate(cx, cy);
@@ -89,7 +96,7 @@ export class Hud {
   setSession(type) {
     const attack = type === 'attack';
     this.el.tower.classList.toggle('hidden', type === 'free');
-    this.el.mode.textContent = attack ? 'TIME ATTACK' : type === 'race' ? 'RACE' : 'FREE DRIVE';
+    this.el.mode.textContent = attack ? 'TIME ATTACK' : type === 'race' ? 'RACE' : type === 'gp' ? 'GRAND PRIX' : 'FREE DRIVE';
   }
 
   setLap(n) { this.el.lap.textContent = n; }

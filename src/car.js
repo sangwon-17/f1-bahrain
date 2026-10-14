@@ -30,7 +30,7 @@ export async function createCar(envMap) {
       console.warn('모델을 불러오지 못했어요:', url, err);
     }
   }
-  return buildMuscleCar(envMap);
+  return buildProceduralCar(envMap);
 }
 
 // ------------------------------------------------------------
@@ -378,14 +378,19 @@ function toGeometry(geo) {
   return g;
 }
 
+// 텍스처는 한 번만 만들어 여러 대가 같이 써요 (AI 차량용)
+const TEX = {};
+const once = (key, make) => TEX[key] || (TEX[key] = make());
+export const isLiveryTex = (t) => !!t && (t === TEX.chassis || t === TEX.sidepod);
+
 export function buildProceduralCar(envMap) {
-  const carbonTex = carbonTexture();
+  const carbonTex = once('carbon', carbonTexture);
   const paint = (opts) => new THREE.MeshPhysicalMaterial({
     metalness: 0.25, roughness: 0.42, clearcoat: 0.35, clearcoatRoughness: 0.35, envMap, envMapIntensity: 1.1, ...opts,
   });
   const M = {
-    livery: paint({ map: chassisLivery(), roughness: 0.48 }),
-    sidepod: paint({ map: sidepodLivery(), roughness: 0.48 }),
+    livery: paint({ map: once('chassis', chassisLivery), roughness: 0.48 }),
+    sidepod: paint({ map: once('sidepod', sidepodLivery), roughness: 0.48 }),
     navy: paint({ color: NAVY, roughness: 0.46 }),
     wingNavy: paint({ color: NAVY, roughness: 0.4, side: THREE.DoubleSide }),
     red: paint({ color: RED, roughness: 0.32, clearcoat: 0.7, side: THREE.DoubleSide }),
@@ -554,7 +559,7 @@ export function buildProceduralCar(envMap) {
 
   return {
     root, body, wheels, steering, rainLight: M.rain,
-    eye: new THREE.Vector3(0, 0.75, 0.1),
+    eye: new THREE.Vector3(0, 0.9, 0.15), // 운전석 눈 높이 (조금 높게 → 앞과 바닥이 더 잘 보여요)
     driverParts,
     isModel: false,
     credit: '',

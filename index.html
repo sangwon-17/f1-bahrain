@@ -158,6 +158,7 @@
     .loading { font-family: var(--num); letter-spacing: 0.2em; color: var(--muted); margin-bottom: 18px; }
     .pause-btns { display: grid; gap: 10px; }
     .modes.three { grid-template-columns: 1fr 1fr; }
+    .modes.three .gp { grid-column: 1 / span 2; border-color: rgba(225, 15, 47, 0.7); background: linear-gradient(135deg, rgba(225, 15, 47, 0.22), rgba(255, 255, 255, 0.04)); }
     .modes.three .race { grid-column: 1 / span 2; border-color: rgba(25, 211, 255, 0.45); background: linear-gradient(135deg, rgba(25, 211, 255, 0.12), rgba(255, 255, 255, 0.04)); }
 
     /* ---------- 레이스: 대기실 / 순위 / 결과 ---------- */
@@ -180,10 +181,6 @@
     .st-row.me { background: rgba(255, 204, 0, 0.16); }
     .results-list { margin-bottom: 20px; }
     .results-list .st-row { font-size: 16px; padding: 12px 14px; }
-    #drs { position: absolute; top: 18%; left: 50%; transform: translateX(-50%); padding: 10px 22px; border-radius: 10px; background: rgba(0,200,83,.88); color: #fff; font-weight: 800; text-align: center; box-shadow: 0 0 24px rgba(0,230,118,.7); opacity: 0; transition: opacity .2s; }
-    #drs.on { opacity: 1; }
-    #drs b { display: block; font-size: 28px; letter-spacing: 4px; }
-    #drs span { font-size: 14px; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script type="importmap">
@@ -191,22 +188,24 @@
       "imports": {
         "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
         "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-        "./src/bahrain-data.js": "./src/bahrain-data.js?v=7",
-        "./src/cameras.js": "./src/cameras.js?v=7",
-        "./src/car.js": "./src/car.js?v=7",
-        "./src/config.js": "./src/config.js?v=7",
-        "./src/environment.js": "./src/environment.js?v=7",
-        "./src/f1design.js": "./src/f1design.js?v=7",
-        "./src/f1geometry.js": "./src/f1geometry.js?v=7",
-        "./src/hud.js": "./src/hud.js?v=7",
-        "./src/main.js": "./src/main.js?v=7",
-        "./src/muscle.js": "./src/muscle.js?v=7",
-        "./src/net.js": "./src/net.js?v=7",
-        "./src/physics.js": "./src/physics.js?v=7",
-        "./src/pitstop.js": "./src/pitstop.js?v=7",
-        "./src/race.js": "./src/race.js?v=7",
-        "./src/textures.js": "./src/textures.js?v=7",
-        "./src/track.js": "./src/track.js?v=7"
+        "./src/ai.js": "./src/ai.js?v=8",
+        "./src/bahrain-data.js": "./src/bahrain-data.js?v=8",
+        "./src/cameras.js": "./src/cameras.js?v=8",
+        "./src/car.js": "./src/car.js?v=8",
+        "./src/config.js": "./src/config.js?v=8",
+        "./src/environment.js": "./src/environment.js?v=8",
+        "./src/f1design.js": "./src/f1design.js?v=8",
+        "./src/f1geometry.js": "./src/f1geometry.js?v=8",
+        "./src/guard.js": "./src/guard.js?v=8",
+        "./src/hud.js": "./src/hud.js?v=8",
+        "./src/main.js": "./src/main.js?v=8",
+        "./src/muscle.js": "./src/muscle.js?v=8",
+        "./src/net.js": "./src/net.js?v=8",
+        "./src/physics.js": "./src/physics.js?v=8",
+        "./src/pitstop.js": "./src/pitstop.js?v=8",
+        "./src/race.js": "./src/race.js?v=8",
+        "./src/textures.js": "./src/textures.js?v=8",
+        "./src/track.js": "./src/track.js?v=8"
       }
     }
   </script>
@@ -259,7 +258,6 @@
     <div id="standings" class="panel hidden"><div class="st-title">RACE · 순위</div><div id="standingsList"></div></div>
     <div id="message" class="message"></div>
     <div id="lights" class="panel hidden"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-    <div id="drs"><b>DRS</b><span>DRS 열림 · 앞차를 추월하세요!</span></div>
     <div id="pitTimer" class="panel hidden">PIT STOP 0.00s</div>
   </div>
 
@@ -270,6 +268,7 @@
       <div class="sub">바레인 인터내셔널 서킷 · 5.412 km · 15 코너</div>
       <div id="loading" class="loading">트랙 준비 중…</div>
       <div id="modeButtons" class="modes three hidden">
+        <button class="mode-btn gp" data-mode="gp"><div class="t">GRAND PRIX · AI 레이스</div><div class="d">AI 드라이버 7명과 함께 3바퀴 레이스! 6번 그리드에서 출발해 추월해 보세요.</div></button>
         <button class="mode-btn primary" data-mode="attack"><div class="t">TIME ATTACK</div><div class="d">랩타임과 구간 기록을 재요. 최고 기록에 도전!</div></button>
         <button class="mode-btn" data-mode="free"><div class="t">FREE DRIVE</div><div class="d">기록 없이 자유롭게 서킷을 달려요.</div></button>
         <button class="mode-btn race" data-mode="race"><div class="t">RACE · 친구와</div><div class="d">초대 링크로 친구와 같은 트랙에서 3바퀴 레이스!</div></button>
@@ -311,7 +310,7 @@
       <h1>결과</h1>
       <div id="resultsList" class="results-list"></div>
       <div class="pause-btns">
-        <button class="mode-btn primary" data-action="lobby"><div class="t">한 번 더 (대기실로)</div></button>
+        <button class="mode-btn primary" data-action="lobby"><div class="t">한 번 더</div></button>
         <button class="mode-btn" data-action="menu"><div class="t">메인 메뉴</div></button>
       </div>
     </div>
@@ -330,6 +329,6 @@
     </div>
   </div>
 
-  <script type="module" src="./src/main.js?v=7"></script>
+  <script type="module" src="./src/main.js?v=8"></script>
 </body>
 </html>

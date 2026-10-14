@@ -6,6 +6,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { BAHRAIN } from './bahrain-data.js';
 import { TRACK, TYRE, CAR } from './config.js';
+import { CornerGuard } from './guard.js';
 import { setMaxAnisotropy } from './textures.js';
 import { createTrack, buildTrackMeshes } from './track.js';
 import { buildEnvironment, makeReflectionEnv } from './environment.js';
@@ -16,6 +17,7 @@ import { PitStop } from './pitstop.js';
 import { Hud, fmtTime } from './hud.js';
 import { Net } from './net.js';
 import { RemoteCars, RACE_LAPS } from './race.js';
+import { AiField } from './ai.js';
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const SECTORS = [0.31, 0.7]; // 구간 경계 (한 바퀴 대비 비율)
@@ -56,6 +58,21 @@ composer.addPass(new ShaderPass({
       gl_FragColor = bad ? vec4(0.0, 0.0, 0.0, 1.0) : vec4(min(c.rgb, vec3(32.0)), c.a);
     }`,
 }));
+// 속도감: 화면 가장자리가 중심 방향으로 번져요 (빠를수록, 가속할수록 강하게)
+const speedBlur = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, amount: { value: 0 } },
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform float amount; varying vec2 vUv;
+    void main() {
+      vec2 d = vUv - 0.5;
+      float k = amount * smoothstep(0.12, 0.6, length(d));
+      vec4 c = vec4(0.0);
+      for (int i = 0; i < 10; i++) c += texture2D(tDiffuse, vUv - d * k * float(i) / 9.0);
+      gl_FragColor = c / 10.0;
+    }`,
+});
+composer.addPass(speedBlur);
 composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.42, 0.55, 1.0));
 composer.addPass(new OutputPass());
 
@@ -86,7 +103,7 @@ addEventListener('blur', () => { for (const k in input) input[k] = false; });
 // ============================================================
 // 게임 상태
 // ============================================================
-let track, env, car, phys, cams, pit, hud, net, remotes;
+let track, env, car, phys, cams, pit, hud, net, remotes, ai, guard;
 // 친구와 레이스 상태
 const race = { id: null, slot: -1, finished: false, finishTime: null, endAt: 0, resultsShown: false, uiT: 0 };
 const game = { state: 'loading', session: 'attack', time: 0, countdown: 0, lightsOutAt: 0, prevState: null };
@@ -124,7 +141,18 @@ function startSession(type) {
   resetRun(gridPose(0));
 
   game.time = 0;
-  if (type === 'attack') {
+  ai.hide();
+  if (type === 'gp') {
+    // AI 7대와 레이스: 나는 6번 그리드에서 출발
+    resetRun(gridPose(5));
+    ai.reset([0, 1, 2, 3, 4, 6, 7].map(gridPose));
+    Object.assign(race, { id: 'gp', finished: false, finishTime: null, resultsShown: false, uiT: 0 });
+    document.getElementById('standings').classList.remove('hidden');
+    game.state = 'countdown';
+    game.countdown = 0;
+    game.lightsOutAt = 4.4 + Math.random() * 1.2;
+    hud.message(`🏁 ${RACE_LAPS}바퀴 그랑프리! 6번 그리드에서 출발 — 신호등이 꺼지면 출발`, 4, 'good');
+  } else if (type === 'attack') {
     game.state = 'countdown';
     game.countdown = 0;
     game.lightsOutAt = 4.4 + Math.random() * 1.2;
@@ -144,6 +172,7 @@ function startSession(type) {
 function resetRun(p) {
   phys.reset(p.x, p.z, p.h);
   phys.newTyres();
+  guard.reset();
   pit.reset();
   resetWheels();
   cams.override = null;
@@ -192,6 +221,7 @@ function togglePause() {
 function showMenu() {
   game.state = 'menu';
   hud.show(false);
+  ai.hide();
   net.set({ mode: 'menu', phase: null, ready: false, start: null, rid: null, rp: null });
   ['lobby', 'results', 'standings'].forEach((id) => document.getElementById(id).classList.add('hidden'));
   document.getElementById('pause').classList.add('hidden');
@@ -300,7 +330,8 @@ function beginRace(start, localStart) {
 /** 같은 레이스에 참가한 사람들의 순위 */
 function raceStandings() {
   const list = [{ me: true, name: '나', prog: timing.prog, fin: race.finishTime }];
-  net.peers.forEach((p, i) => {
+  if (game.session === 'gp') ai.cars.forEach((a) => list.push({ me: false, name: a.name, prog: a.prog, fin: a.fin }));
+  else net.peers.forEach((p, i) => {
     const rp = p.presence && p.presence.rp;
     if (Array.isArray(rp) && rp[0] === race.id && typeof rp[1] === 'number') {
       list.push({ me: false, name: net.nameOf(p, i), prog: rp[1], fin: typeof rp[2] === 'number' ? rp[2] : null });
@@ -382,6 +413,7 @@ function updateRace(dt) {
 function stepRunning(dt) {
   game.time += dt;
   if (pit.active) {
+    phys.guardSteer = 0;
     const wasStopped = pit.stopped;
     const done = pit.update(dt, phys, car);
     timing.hadPit = true;
@@ -408,15 +440,14 @@ function stepRunning(dt) {
     fx.kerbSide = (sL === 'kerb' ? 1 : 0) - (sR === 'kerb' ? 1 : 0);
     fx.sand = (sL === 'sand' ? 0.5 : 0) + (sR === 'sand' ? 0.5 : 0);
 
-    // 코너 보조용: 앞쪽 트랙 지점을 향하는 데 필요한 조향각 (pure pursuit)
-    const look = Math.min(45, Math.max(10, 6 + phys.u * 0.5));
-    const lim = track.hw - 1.5;
-    const tp = track.poseAt(loc.d + look, Math.max(-lim, Math.min(lim, loc.lat * 0.8)));
-    const ang = Math.atan2(tp.x - phys.x, tp.z - phys.z) - phys.yaw;
-    input.assist = Math.atan((2 * (CAR.cgToFront + CAR.cgToRear) * Math.sin(Math.atan2(Math.sin(ang), Math.cos(ang)))) / look);
+    phys.cornerK = Math.abs(track.k[loc.idx] || 0);
+    // 코너 정도 0~1 (코너 조금 전부터 커져요) → 코너에서만 핸들이 더 꺾여요
+    const ct = clamp(((track.corner[loc.idx] || 0) - 0.1) / 0.3, 0, 1);
+    phys.cornerAmt = ct * ct * (3 - 2 * ct);
     const SUB = 8;
     for (let i = 0; i < SUB; i++) phys.step(dt / SUB, input, surf);
     loc = track.locate(phys.x, phys.z, loc.idx);
+    guard.update(dt, phys, loc, track.inPitZone(loc.d) && loc.lat < 0);
     collide();
     collideCars();
     if (pit.checkEntry(timing.lastD, loc)) {
@@ -455,7 +486,7 @@ function collide() {
 const CAR_CIRCLES = [-1.7, -0.57, 0.57, 1.7];
 const CAR_RADIUS = 0.98;
 function collideCars() {
-  const others = remotes.obstacles();
+  const others = game.session === 'gp' ? ai.obstacles() : remotes.obstacles();
   if (!others.length) return;
   const sy = Math.sin(phys.yaw), cy = Math.cos(phys.yaw);
   for (const o of others) {
@@ -473,16 +504,18 @@ function collideCars() {
     }
     if (!best) continue;
     // 겹친 만큼 절반 밀려나요 (나머지 절반은 상대 화면에서)
-    phys.x += best.nx * best.pen * 0.5;
-    phys.z += best.nz * best.pen * 0.5;
+    const push = o.ai ? 1 : 0.5; // AI 차는 밀리지 않아서 내가 다 밀려나요
+    phys.x += best.nx * best.pen * push;
+    phys.z += best.nz * best.pen * push;
     const { vx, vz } = phys.worldVel();
     const vn = (vx - o.vx) * best.nx + (vz - o.vz) * best.nz;
     if (vn >= 0) continue;
-    const e = 0.35;
-    const j = (-(1 + e) * vn) / 2; // 무게가 같다고 보고 반씩
-    phys.setWorldVel(vx + best.nx * j, vz + best.nz * j);
-    // 앞/뒤 끝을 맞으면 차가 돌아가요
-    phys.r += ((best.pz * best.nx - best.px * best.nz) * j * CAR.mass) / CAR.inertia * 0.6;
+    // 살짝 튕기고 속도가 줄어드는 정도로만 (날아가거나 크게 돌지 않게)
+    const e = 0.1;
+    const j = Math.min(5, (-(1 + e) * vn) / 2);
+    phys.setWorldVel((vx + best.nx * j) * 0.97, (vz + best.nz * j) * 0.97);
+    phys.v *= 0.5; // 옆으로 미끄러지는 속도는 줄여서 바로 다시 운전할 수 있게
+    phys.r = clamp(phys.r + clamp(((best.pz * best.nx - best.px * best.nz) * j * CAR.mass) / CAR.inertia * 0.08, -0.25, 0.25), -0.8, 0.8);
     cams.addShake(Math.min(1.2, -vn / 10));
     if (-vn > 6) hud.message('💥 충돌!', 1.2, 'box');
   }
@@ -550,7 +583,7 @@ function completeLap(lapT) {
   timing.trace = [0];
   timing.hadPit = pit.active;
   hud.setLap(timing.lap);
-  if (game.session === 'race' && !race.finished && timing.lap > RACE_LAPS) finishRace();
+  if ((game.session === 'race' || game.session === 'gp') && !race.finished && timing.lap > RACE_LAPS) finishRace();
   setTimeout(() => { if (timing.sector === 0) [0, 1, 2].forEach((i) => hud.setSector(i, null)); }, 4000);
 }
 
@@ -595,7 +628,6 @@ function updateCarVisual(dt) {
   // 액티브 에어로: 고속 직선에서 풀스로틀이면 날개가 눕고, 브레이크·코너에선 바로 다시 세워요
   const wantOpen = game.state === 'running' && !pit.active && phys.u > 230 / 3.6 && phys.throttle > 0.95 && Math.abs(phys.steerIn) < 0.15 ? 1 : 0;
   phys.aeroOpen = (phys.aeroOpen || 0) + (wantOpen - (phys.aeroOpen || 0)) * Math.min(1, dt * (wantOpen ? 4 : 10));
-  document.getElementById('drs').classList.toggle('on', phys.aeroOpen > 0.5);
   car.setAero(phys.aeroOpen);
   if (car.rainLight) {
     const blink = pit.active && Math.floor(game.time * 4) % 2 === 0;
@@ -632,7 +664,7 @@ function drawWheelDisplay() {
   g.font = '600 18px "Titillium Web", sans-serif';
   g.fillText(`TYRE ${Math.round(Math.max(...phys.wear) * 100)}%   LAP ${timing.lap || 1}`, 128, 112);
   tex.needsUpdate = true;
-  const frac = clamp((phys.rpm - 5200) / 1800, 0, 1);
+  const frac = clamp((phys.rpm - 9500) / 3000, 0, 1);
   const on = Math.round(frac * leds.length);
   leds.forEach((m, i) => {
     const col = i < 4 ? [0.1, 2.2, 0.4] : i < 7 ? [2.6, 0.1, 0.1] : [0.4, 0.6, 3];
@@ -645,7 +677,7 @@ function updateHud(dt) {
   hud.setSpeed(phys.speed * 3.6, phys.gear, cams.active === 'cockpit');
   hud.setTyres(phys.wear);
   hud.setBox(pit.requested, pit.active);
-  hud.drawMinimap(phys.x, phys.z, phys.yaw);
+  hud.drawMinimap(phys.x, phys.z, phys.yaw, game.session === 'gp' ? ai.dots() : []);
 }
 
 // ============================================================
@@ -657,6 +689,8 @@ function frame() {
   const dt = Math.min(clock.getDelta(), 1 / 20);
   if (game.state === 'loading') return;
   update(dt);
+  speedBlur.uniforms.amount.value = clamp((phys.speed * 3.6 - 80) / 240, 0, 1) * 0.12 + Math.max(0, cams.kick || 0) * 0.06;
+  if (cams.active === 'cockpit') speedBlur.uniforms.amount.value *= 0.4; // 운전석에선 앞이 또렷하게
   composer.render();
 }
 
@@ -670,7 +704,7 @@ function update(dt) {
       // 출발 전: 브레이크 잡은 채 엔진만 (핸들은 움직여요)
       phys.throttle += ((input.up ? 1 : 0) - phys.throttle) * Math.min(1, dt * 8);
       phys.steerIn += (((input.left ? 1 : 0) - (input.right ? 1 : 0)) - phys.steerIn) * Math.min(1, dt * 6);
-      phys.rpm += ((4000 + phys.throttle * 7000) - phys.rpm) * Math.min(1, dt * 6);
+      phys.rpm += ((5000 + phys.throttle * 7500) - phys.rpm) * Math.min(1, dt * 6);
     } else {
       hud.setLights(0, false);
       env.startLights.set(0);
@@ -681,10 +715,11 @@ function update(dt) {
     }
   } else if (game.state === 'running') {
     stepRunning(dt);
+    if (game.session === 'gp') ai.update(dt, game.time, { prog: timing.prog, lat: pit.active ? 99 : loc.lat, v: phys.u }, RACE_LAPS);
   } else if (game.state === 'lobby') {
     updateLobby(dt);
   }
-  if (game.session === 'race' && (game.state === 'running' || game.state === 'countdown')) updateRace(dt);
+  if ((game.session === 'race' || game.session === 'gp') && (game.state === 'running' || game.state === 'countdown')) updateRace(dt);
   net.tick(dt, game.state === 'menu' || game.state === 'loading' ? null : phys);
   remotes.update(dt, (peer, i) => net.nameOf(peer, i));
 
@@ -705,6 +740,7 @@ function update(dt) {
 async function init() {
   await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 30)));
   track = createTrack(BAHRAIN.coords);
+  guard = new CornerGuard(track);
   const trackGroup = buildTrackMeshes(track, scene);
   env = buildEnvironment(scene, track);
   const reflection = makeReflectionEnv(renderer, scene.background);
@@ -719,6 +755,7 @@ async function init() {
   hud = new Hud(track);
   net = new Net();
   remotes = new RemoteCars(net, scene, reflection);
+  ai = new AiField(track, scene, reflection);
   net.init().then((ok) => {
     const btn = document.querySelector('[data-mode="race"] .d');
     if (!ok && btn) btn.textContent = '인터넷 연결이 필요해요. (지금은 혼자 연습)';
@@ -740,7 +777,7 @@ async function init() {
     if (a === 'resume') togglePause();
     if (a === 'restart') startSession(game.session);
     if (a === 'menu') showMenu();
-    if (a === 'lobby') startSession('race');
+    if (a === 'lobby') startSession(game.session === 'gp' ? 'gp' : 'race');
     if (a === 'ready') toggleReady();
     if (a === 'invite') {
       const link = net.inviteLink();

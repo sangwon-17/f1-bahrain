@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildMuscleCar } from './muscle.js';
+import { buildProceduralCar, isLiveryTex } from './car.js';
 import { CAR } from './config.js';
 
 // 다른 플레이어의 차를 그려요 (위치는 받은 정보 사이를 부드럽게 이어서)
@@ -8,7 +8,7 @@ export const RACE_LAPS = 3;
 
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
-function nameTag() {
+export function nameTag() {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 128;
@@ -40,6 +40,20 @@ function nameTag() {
       tex.needsUpdate = true;
     },
   };
+}
+
+/** F1 차 색 바꾸기: 리버리(무늬)와 남색 부분에 팀 색을 입혀요 */
+export function tintCar(car, paint) {
+  const tint = new THREE.Color(paint), seen = new Set();
+  car.root.traverse((o) => {
+    if (!o.isMesh) return;
+    (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => {
+      if (seen.has(m) || !m.color) return;
+      seen.add(m);
+      if (isLiveryTex(m.map)) m.color.copy(tint).lerp(new THREE.Color(1, 1, 1), 0.25);
+      else if (m.color.getHexString() === '16224f') m.color.copy(tint).multiplyScalar(0.45);
+    });
+  });
 }
 
 const COLORS = ['#ffcc00', '#19d3ff', '#ff5a6e', '#a3e635', '#c084fc', '#fb923c'];
@@ -74,7 +88,8 @@ export class RemoteCars {
       seen.add(peer.peer);
       let r = this.cars.get(peer.peer);
       if (!r) {
-        const car = buildMuscleCar(this.envMap, { paint: PAINTS[(i + 1) % PAINTS.length] });
+        const car = buildProceduralCar(this.envMap);
+        tintCar(car, PAINTS[(i + 1) % PAINTS.length]);
         car.driverParts.forEach((p) => { p.visible = true; });
         const tag = nameTag();
         car.root.add(tag.sprite);

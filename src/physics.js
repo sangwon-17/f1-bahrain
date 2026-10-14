@@ -1,4 +1,4 @@
-import { CAR, TYRE, GEARS, DRIFT } from './config.js';
+import { CAR, TYRE, GEARS, DRIFT, STEER } from './config.js';
 
 // F1 주행 물리 — 자전거 모델(앞/뒤 바퀴 두 개로 단순화) + 다운포스 + 타이어 마모
 // 좌표: u = 앞으로 가는 속도, v = 옆(왼쪽 +) 속도, r = 회전 속도(왼쪽 +)
@@ -31,7 +31,7 @@ export class CarPhysics {
     Object.assign(this, {
       x, z, yaw,
       u: 0, v: 0, r: 0,
-      steerIn: 0, steer: 0, throttle: 0, brake: 0,
+      steerIn: 0, steer: 0, guardSteer: 0, throttle: 0, brake: 0,
       gear: 1, rpm: 4000, shiftT: 0, reverse: false, reverseHold: 0,
       ax: 0, ay: 0, wheelSpin: 0, slipF: 0, slipR: 0, lockup: 0, drift: 0,
     });
@@ -51,10 +51,11 @@ export class CarPhysics {
     const a = CAR.cgToFront, b = CAR.cgToRear, Lw = a + b, m = CAR.mass;
 
     // ---- 키 입력을 부드럽게 (키보드라도 핸들이 천천히 돌아가요) ----
-    const steerTarget = (input.left ? 1 : 0) - (input.right ? 1 : 0);
+    // guardSteer = 코너 이탈 방지가 살짝 대신 꺾어주는 양 (main.js cornerGuard)
+    const steerTarget = clamp((input.left ? 1 : 0) - (input.right ? 1 : 0) + (this.guardSteer || 0), -1, 1);
     const returning = steerTarget === 0 || Math.sign(steerTarget) !== Math.sign(this.steerIn);
-    this.steerIn = approach(this.steerIn, steerTarget, (returning ? 5.5 : 3.4) * dt / (1 + Math.abs(this.u) / 40));
-    this.throttle = approach(this.throttle, input.up ? 1 : 0, (input.up ? 1.8 : 7) * dt);
+    this.steerIn = approach(this.steerIn, steerTarget, (returning ? 5.5 : 4.5) * dt);
+    this.throttle = approach(this.throttle, input.up ? 1 : 0, (input.up ? 9 : 7) * dt);
     this.brake = approach(this.brake, input.down ? 1 : 0, (input.down ? 8 : 8) * dt); // 키를 누르면 빠르게 세게
 
     const u = this.u, au = Math.abs(u);
@@ -63,18 +64,21 @@ export class CarPhysics {
     this.drift = approach(this.drift, wantDrift, (wantDrift ? DRIFT.blendIn : DRIFT.blendOut) * dt);
     const d = this.drift;
     // 빠를수록 핸들이 조금만 꺾여요 (실제 F1도 고속에선 아주 작게 꺾어요)
-    const maxSteer = clamp(CAR.maxSteer * Math.pow(10 / Math.max(au, 10), 0.7), CAR.minSteer + 0.1 * d, CAR.maxSteer);
-    this.steer = this.steerIn * maxSteer;
-    // 코너 보조: 코너 방향으로 핸들을 꺾고 있으면 트랙을 따라가는 각도 쪽으로 살짝 맞춰줘요 (드리프트 중엔 꺼져요)
-    if (input.assist != null && steerTarget !== 0 && Math.sign(input.assist) === steerTarget && au > 8) {
-      const want = clamp(input.assist, -maxSteer, maxSteer);
-      this.steer += (want - this.steer) * 0.4 * (1 - d);
-    }
+    // 핸들 최대 각도 (config.js STEER): 직선은 속도에 따라 작게, 코너 구간에선 cornerDeg까지
+    // cornerAmt = 지금 위치가 얼마나 코너인지 (0 = 직선, 1 = 코너, main.js에서 넣어줘요)
+    const kmh = au * 3.6;
+    const straightDeg = STEER.straightSlowDeg + (STEER.straightFastDeg - STEER.straightSlowDeg) * clamp((kmh - 60) / (250 - 60), 0, 1);
+    let deg = straightDeg + (STEER.cornerDeg - straightDeg) * (this.cornerAmt || 0);
+    deg += (Math.max(deg, STEER.parkingDeg) - deg) * smooth01((40 - kmh) / 25); // 거의 멈췄을 땐 크게 (유턴·피트)
+    deg += STEER.driftExtraDeg * d;
+    this.steer = this.steerIn * deg * (Math.PI / 180);
+    const steerWant = this.steer; // 운전자가 꺾고 싶은 만큼 (아래 조향 보조로 줄이기 전)
     // 조향 보조: 앞바퀴가 최대 접지력을 내는 각도(약 7°)보다 더 미끄러지지 않게 꺾는 양을 맞춰요
     // 드리프트 중엔 카운터스티어가 되도록 여유를 더 줘요
+    // (한도를 너무 넓히면 앞바퀴가 최대 접지력 각도를 넘어 미끄러져서 코너에서 앞이 밀려요)
     if (au > 5) {
       const phi = Math.atan2(this.v + a * this.r, au);
-      const lim = 0.16 + 0.3 * d;
+      const lim = 0.12 + 0.63 * d; // 평소 약 7°, 드리프트 중 최대 약 43°
       this.steer = clamp(this.steer, phi - lim, phi + lim);
     }
 
@@ -101,12 +105,11 @@ export class CarPhysics {
       if (input.up) Fbrake = 6000 * Math.sign(u);
     } else {
       Fdrive = (CAR.power * this.throttle) / Math.max(au, 6);
-      Fdrive = Math.min(Fdrive, (4500 + 31 * au) * this.throttle); // 저속 가속을 부드럽게 (최고속도 320은 그대로)
-      if (this.shiftT > 0) Fdrive *= 0.35; // 기어 바꾸는 순간 살짝 힘이 빠져요
-      Fdrive = Math.min(Fdrive, muRbase * FzR * 0.62); // 트랙션 컨트롤: 바퀴가 헛돌지 않게
+      if (this.shiftT > 0) Fdrive *= 0.8; // F1은 기어 변속이 아주 빨라요 // 기어 바꾸는 순간 살짝 힘이 빠져요
+      Fdrive = Math.min(Fdrive, muRbase * FzR * CAR.traction); // 트랙션 컨트롤: 바퀴가 헛돌지 않게
       // 뒷바퀴가 옆으로 많이 미끄러지면 힘을 줄여서 스핀을 막아요 (키보드용 보조, 드리프트 중엔 꺼져요)
       const rearSlip = Math.abs(Math.atan2(this.v - b * this.r, Math.max(au, 3)));
-      Fdrive *= 1 - clamp((rearSlip - 0.07) / 0.08, 0, 0.85) * (1 - d);
+      Fdrive *= 1 - clamp((rearSlip - 0.12) / 0.1, 0, 0.5) * (1 - d); // 코너에서도 액셀이 잘 먹게 덜 끊어요
       if (u > 0.05) {
         Fbrake = this.brake * Math.min(CAR.maxBrake, (muF * FzF + muR * FzR) * CAR.brakeGrip); // ABS (게임용으로 강하게)
         engineBrake = (1 - this.throttle) * (1200 + au * 35); // 엔진 브레이크 (뒷바퀴)
@@ -131,7 +134,7 @@ export class CarPhysics {
 
     // ---- 운동 방정식 ----
     const cs = Math.cos(this.steer), sn = Math.sin(this.steer);
-    const du = (Fx - FyF * sn) / m + this.v * this.r;
+    const du = (Fx - FyF * sn * 0.35) / m + this.v * this.r; // 코너링 보조: 핸들을 꺾어도 속도가 덜 빠져요
     const dv = (FyR + FyF * cs) / m - u * this.r;
     const dr = (a * FyF * cs - b * FyR) / CAR.inertia;
     let nu = u + du * dt;
@@ -140,10 +143,13 @@ export class CarPhysics {
     if (au > 5) {
       // 핸들 각도와 접지력으로 정해지는 '자연스러운' 회전 속도
       const boost = 1 + (DRIFT.yawBoost - 1) * d;
-      const gripLimit = (((muF * FzF + muRbase * FzR) / m) / au) * boost;
-      const rRef = clamp(((u * Math.tan(this.steer)) / Lw) * boost, -gripLimit, gripLimit);
+      const gripLimit = (((muF * FzF + muRbase * FzR) / m) / au) * boost * CAR.cornerAssist;
+      // 목표 회전은 실제 바퀴 각도가 아니라 운전자가 꺾은 만큼으로 정해요 (바퀴는 접지력 최대 각도에 머물러요)
+      const rRef = clamp(((u * Math.tan(steerWant)) / Lw) * boost, -gripLimit, gripLimit);
       if (Math.sign(nr) !== Math.sign(rRef) || Math.abs(nr) > Math.abs(rRef)) {
         nr += (rRef - nr) * Math.min(1, dt * (7 - 4 * d)); // 스핀 방지 (오버스티어 잡기), 드리프트 중엔 느슨하게
+      } else if (this.steerIn !== 0) {
+        nr += (rRef - nr) * Math.min(1, dt * CAR.assistRate * (1 - 0.6 * d)); // 코너링 보조: 밀려나가지 않게 차를 돌려줘요
       }
       // 옆미끄러짐 줄이기: 평소엔 약 5°, 드리프트 중엔 최대 DRIFT.maxAngle까지 허용
       // 줄인 옆 속도는 앞 속도로 돌려줘서 속도가 덜 빠져요
@@ -151,8 +157,9 @@ export class CarPhysics {
       const beta = Math.atan2(nv, Math.max(nu, 1));
       if (Math.abs(beta) > maxBeta) {
         const sp = Math.hypot(nu, nv);
-        nv -= (nv - Math.tan(maxBeta * Math.sign(beta)) * nu) * Math.min(1, dt * (5 - 2 * d));
-        if (d > 0 && nu > 0) nu = Math.sqrt(Math.max(0, sp * sp - nv * nv)) * d + nu * (1 - d);
+        nv -= (nv - Math.tan(maxBeta * Math.sign(beta)) * nu) * Math.min(1, dt * (8 - 5 * d));
+        const keep = Math.max(d, 0.95); // 옆으로 미끄러지던 속도를 앞으로 돌려줘서 코너에서도 속도 유지
+        if (nu > 0) nu = Math.sqrt(Math.max(0, sp * sp - nv * nv)) * keep + nu * (1 - keep);
       }
       // 드리프트 중 속도가 갑자기 빠지지 않게 (브레이크를 밟으면 그대로 감속)
       if (d > 0 && !input.down && surf.drag < 1000) {
@@ -168,11 +175,6 @@ export class CarPhysics {
     if (!this.reverse && u >= 0 && nu < 0) nu = 0; // 브레이크로 뒤로 가지는 않아요
     if (this.reverse && u <= 0 && nu > 0 && !input.up) nu = 0;
 
-    // 고속 안정 장치: 타이어가 버틸 수 있는 것보다 빨리 돌지 않게 회전 속도를 눌러줘요 (드리프트 중엔 꺼져요)
-    if (nu > 15) {
-      const rMax = (CAR.mu * surf.grip * G * (1 + DF / (m * G)) * 1.05) / nu;
-      nr -= (nr - clamp(nr, -rMax, rMax)) * Math.min(1, dt * 10) * (1 - d);
-    }
     // 아주 느릴 때는 단순한 바퀴 굴림 모델로 (흔들림 방지)
     const w = smooth01((Math.abs(nu) - 1) / 4);
     const rKin = (nu * Math.tan(this.steer)) / Lw;
@@ -207,13 +209,13 @@ export class CarPhysics {
       return;
     }
     if (this.gear < 1) this.gear = 1;
-    if (this.gear < GEARS.length - 1 && au > GEARS[this.gear] * 0.97) { this.gear++; this.shiftT = 0.09; this.shifted = 1; }
+    if (this.gear < GEARS.length - 1 && au > GEARS[this.gear] * 0.97) { this.gear++; this.shiftT = 0.03; this.shifted = 1; }
     else if (this.gear > 1 && au < GEARS[this.gear - 1] * 0.82) { this.gear--; this.shifted = -1; }
     const lo = this.gear > 1 ? GEARS[this.gear - 1] * 0.78 : 0;
     const hi = GEARS[this.gear];
     const t = clamp((au - lo) / (hi - lo), 0, 1);
-    // V8 엔진 회전수 (약 1,500 ~ 7,000 rpm)
-    const target = (this.gear === 1 ? 1500 : 3900) + t * (this.gear === 1 ? 5300 : 3100) + this.throttle * 150;
+    // F1 엔진 회전수 (약 5,000 ~ 12,500 rpm)
+    const target = (this.gear === 1 ? 5000 : 9600) + t * (this.gear === 1 ? 7400 : 2900) + this.throttle * 150;
     this.rpm += (target - this.rpm) * Math.min(1, dt * 18);
   }
 
