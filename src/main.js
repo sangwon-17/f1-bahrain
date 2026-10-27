@@ -443,9 +443,6 @@ function stepRunning(dt) {
     fx.sand = (sL === 'sand' ? 0.5 : 0) + (sR === 'sand' ? 0.5 : 0);
 
     phys.cornerK = Math.abs(track.k[loc.idx] || 0);
-    // 코너 정도 0~1 (코너 조금 전부터 커져요) → 코너에서만 핸들이 더 꺾여요
-    const ct = clamp(((track.corner[loc.idx] || 0) - 0.1) / 0.3, 0, 1);
-    phys.cornerAmt = ct * ct * (3 - 2 * ct);
     const SUB = 8;
     for (let i = 0; i < SUB; i++) phys.step(dt / SUB, input, surf);
     loc = track.locate(phys.x, phys.z, loc.idx);

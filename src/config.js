@@ -45,12 +45,15 @@ export const CAR = {
   wheelRadius: 0.36,
 };
 
-// 핸들 최대 각도 (도, 방향키를 끝까지 눌렀을 때 앞바퀴 기준) — 숫자를 바꿔서 느낌을 조절해요
+// 핸들 — Roblox A-Chassis 방식 (Roblox F1 게임들이 쓰는 차량 엔진)
+// 키를 누르면 일정한 빠르기로 꺾이고, 최대 각도는 '속도'로만 정해져요 (직선/코너 구분 없음)
+// 최대 각도 = maxDeg × (1 − 속도/decayKmh), 단 maxDeg × minSteer 밑으로는 안 내려가요
 export const STEER = {
-  straightSlowDeg: 8,   // 직선, 60 km/h 이하
-  straightMaxG: 1.2,    // 직선에서 핸들을 끝까지 꺾었을 때 옆으로 받는 힘 (G) — 빠를수록 각도가 자동으로 작아져서 고속에서 휘청이지 않아요
-  cornerDeg: 12,        // 코너 구간 (속도와 상관없이 같아요)
-  parkingDeg: 30,       // 거의 멈췄을 때 (15 km/h 이하, 40 km/h까지 점점 줄어요) — 유턴·피트·사고 후 탈출용
+  maxDeg: 30,           // 멈춰 있을 때 최대 각도 (A-Chassis SteerInner/SteerOuter)
+  steerSpeed: 3,        // 꺾는 빠르기 (초당, 1 = 끝까지) — A-Chassis SteerSpeed 0.05 × 60틱
+  returnSpeed: 6,       // 가운데로 돌아오는 빠르기 (손을 떼거나 반대로 꺾을 때) — ReturnSpeed 0.1 × 60틱
+  decayKmh: 293,        // 이 속도에 가까워질수록 각도가 일정하게 줄어요 — SteerDecay 320 stud/s
+  minSteer: 0.05,       // 아무리 빨라도 최대 각도의 이만큼은 남아요 (A-Chassis 기본 10%, F1 300 km/h 직선용으로 5%)
   driftExtraDeg: 6,     // 드리프트(Space) 중 추가 각도 — 카운터스티어용
 };
 

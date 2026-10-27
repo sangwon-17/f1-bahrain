@@ -52,9 +52,10 @@ export class CarPhysics {
 
     // ---- 키 입력을 부드럽게 (키보드라도 핸들이 천천히 돌아가요) ----
     // guardSteer = 코너 이탈 방지가 살짝 대신 꺾어주는 양 (main.js cornerGuard)
+    // A-Chassis 방식: 가운데 쪽으로 움직일 땐 returnSpeed, 바깥쪽으로 꺾을 땐 steerSpeed (일정한 빠르기)
     const steerTarget = clamp((input.left ? 1 : 0) - (input.right ? 1 : 0) + (this.guardSteer || 0), -1, 1);
-    const returning = steerTarget === 0 || Math.sign(steerTarget) !== Math.sign(this.steerIn);
-    this.steerIn = approach(this.steerIn, steerTarget, (returning ? 5.5 : 4.5) * dt);
+    const returning = steerTarget > this.steerIn ? this.steerIn < 0 : this.steerIn > 0;
+    this.steerIn = approach(this.steerIn, steerTarget, (returning ? STEER.returnSpeed : STEER.steerSpeed) * dt);
     const ab = this.autoBrake || 0; // 코너 속도 보조 (guard.js)
     this.throttle = approach(this.throttle, input.up ? 1 - Math.min(1, ab * 4) : 0, (input.up ? 4 : 7) * dt);
     this.brake = approach(this.brake, Math.max(input.down ? 1 : 0, ab), (input.down ? 8 : 8) * dt); // 키를 누르면 빠르게 세게
@@ -64,15 +65,11 @@ export class CarPhysics {
     const wantDrift = input.drift && !this.reverse && u > 8 ? 1 : 0;
     this.drift = approach(this.drift, wantDrift, (wantDrift ? DRIFT.blendIn : DRIFT.blendOut) * dt);
     const d = this.drift;
-    // 빠를수록 핸들이 조금만 꺾여요 (실제 F1도 고속에선 아주 작게 꺾어요)
-    // 핸들 최대 각도 (config.js STEER): 직선은 속도에 따라 작게, 코너 구간에선 cornerDeg까지
-    // cornerAmt = 지금 위치가 얼마나 코너인지 (0 = 직선, 1 = 코너, main.js에서 넣어줘요)
+    // 핸들 최대 각도 (config.js STEER, A-Chassis SteerDecay/MinSteer): 빠를수록 일정하게 줄고, 최소 minSteer는 남아요
     const kmh = au * 3.6;
-    const straightDeg = Math.min(STEER.straightSlowDeg, (Math.atan((STEER.straightMaxG * 9.81 * Lw) / Math.max(au * au, 1)) * 180) / Math.PI);
-    let deg = straightDeg + (STEER.cornerDeg - straightDeg) * (this.cornerAmt || 0);
-    deg += (Math.max(deg, STEER.parkingDeg) - deg) * smooth01((40 - kmh) / 25); // 거의 멈췄을 땐 크게 (유턴·피트)
-    deg += STEER.driftExtraDeg * d;
-    this.steer = this.steerIn * deg * (Math.PI / 180);
+    const deg = STEER.maxDeg * (1 - Math.min(kmh / STEER.decayKmh, 1 - STEER.minSteer)) + STEER.driftExtraDeg * d;
+    this.steerMax = deg * (Math.PI / 180); // 핸들 끝까지 꺾었을 때 각도 (guard.js가 써요)
+    this.steer = this.steerIn * this.steerMax;
     const steerWant = this.steer; // 운전자가 꺾고 싶은 만큼 (아래 조향 보조로 줄이기 전)
     // 조향 보조: 앞바퀴가 최대 접지력을 내는 각도(약 7°)보다 더 미끄러지지 않게 꺾는 양을 맞춰요
     // 드리프트 중엔 카운터스티어가 되도록 여유를 더 줘요

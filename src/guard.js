@@ -1,4 +1,4 @@
-import { TRACK, GUARD, STEER, CAR } from './config.js';
+import { TRACK, GUARD, CAR } from './config.js';
 
 // 코너 이탈 방지 (설정: config.js GUARD)
 // - 코너에 들어가기 직전부터 코너가 끝날 때까지만 켜져요. 지나온 코너 뒤 직선에선 꺼져요.
@@ -67,7 +67,7 @@ export class CornerGuard {
       const excess = out - Math.max(0, edge - absLat) / GUARD.lookahead;
       if (excess > 0) {
         const needRate = Math.atan2(excess, along) / GUARD.lookahead; // 이만큼 더 돌아야 해요 (rad/s)
-        const perSteer = (along * Math.tan(STEER.cornerDeg * Math.PI / 180)) / (CAR.cgToFront + CAR.cgToRear); // 핸들 끝까지 = 이만큼 돌아요
+        const perSteer = (along * Math.tan(phys.steerMax || 0.05)) / (CAR.cgToFront + CAR.cgToRear); // 핸들 끝까지 = 이만큼 돌아요
         want = -side * w * Math.min(GUARD.maxSteer, (needRate / perSteer) * GUARD.strength);
       }
     }

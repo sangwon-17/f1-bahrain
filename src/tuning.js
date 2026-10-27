@@ -59,9 +59,11 @@ export function createTuning(guard) {
   add(grip, CAR, 'cornerAssist', 1, 2, 0.05, '코너링 보조 (차 돌려주기)');
 
   const steer = gui.addFolder('핸들');
-  add(steer, STEER, 'straightSlowDeg', 2, 20, 0.5, '저속 최대 각도 (°)');
-  add(steer, STEER, 'straightMaxG', 0.5, 3, 0.1, '고속 직선 민감도 (옆 G)');
-  add(steer, STEER, 'cornerDeg', 4, 25, 0.5, '코너 구간 최대 각도 (°)');
+  add(steer, STEER, 'maxDeg', 10, 45, 0.5, '최대 각도 (멈췄을 때, °)');
+  add(steer, STEER, 'steerSpeed', 1, 10, 0.1, '꺾는 빠르기');
+  add(steer, STEER, 'returnSpeed', 1, 15, 0.1, '돌아오는 빠르기');
+  add(steer, STEER, 'decayKmh', 150, 600, 5, '각도 줄어드는 속도 (km/h)');
+  add(steer, STEER, 'minSteer', 0.02, 0.5, 0.01, '고속 최소 각도 비율');
 
   const assist = gui.addFolder('코너 보조');
   assist.add(GUARD, 'on').name('이탈 방지 핸들 보조').onChange(refresh);
