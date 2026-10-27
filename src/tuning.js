@@ -14,6 +14,7 @@ function load() {
     const saved = JSON.parse(localStorage.getItem(KEY));
     if (!saved) return;
     for (const g in saved) for (const k in saved[g]) {
+      if (g === 'GUARD' && k === 'speedOn') continue; // 예전에 저장된 '켜짐' 값이 기본값(꺼짐)을 덮지 않게
       if (GROUPS[g] && typeof DEFAULTS[g][k] === typeof saved[g][k]) GROUPS[g][k] = saved[g][k];
     }
   } catch { /* 저장된 값이 없거나 읽을 수 없으면 기본값 */ }
